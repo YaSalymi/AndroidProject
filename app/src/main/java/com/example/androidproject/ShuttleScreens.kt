@@ -32,11 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// --- ЭКРАН 1: СПИСОК ОБЪЕКТОВ ---
 @Composable
 fun FleetListScreen(
-    state: FleetUiState,
+    state: FleetListUiState,
     onShuttleClick: (String) -> Unit,
+    onSummaryClick: () -> Unit,
     onAddShuttle: () -> Unit,
     onDeleteShuttle: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -53,11 +53,16 @@ fun FleetListScreen(
         ) {
             Text(
                 text = "Космический флот",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
-            Button(onClick = onAddShuttle) {
-                Text("+ Новый")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSummaryClick) {
+                    Text("Сводка")
+                }
+                Button(onClick = onAddShuttle) {
+                    Text("+ Новый")
+                }
             }
         }
 
@@ -114,10 +119,9 @@ fun FleetListScreen(
     }
 }
 
-// --- ЭКРАН 2: ДЕТАЛИ ШАТТЛА ---
 @Composable
 fun ShuttleDetailScreen(
-    shuttle: ShuttleItem,
+    state: ShuttleDetailUiState,
     onBack: () -> Unit,
     onLoadCargo: () -> Unit,
     onLaunch: () -> Unit,
@@ -126,6 +130,12 @@ fun ShuttleDetailScreen(
     onReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val shuttle = state.shuttle
+    if (shuttle == null) {
+        ShuttleNotFoundScreen(onBack = onBack, modifier = modifier)
+        return
+    }
+
     val backgroundColor = if (shuttle.isCritical) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.background
 
     Column(
@@ -244,7 +254,7 @@ fun ShuttleDetailScreen(
             enabled = shuttle.canJump,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Совершить гиперпрыжок (-40% топл., -35% корп.)")
+            Text("Совершить гиперпрыжок (-25% топл., -35% корп.)")
         }
 
         Button(
@@ -267,6 +277,89 @@ fun ShuttleDetailScreen(
             }
         ) {
             Text(if (shuttle.isCritical) "Аварийная эвакуация и ремонт (Сброс)" else "Техническое обслуживание (Сброс)")
+        }
+    }
+}
+
+@Composable
+fun FleetSummaryScreen(
+    state: FleetSummaryUiState,
+    onBack: () -> Unit,
+    onLaunchAll: () -> Unit,
+    onDockAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        TextButton(onClick = onBack) {
+            Text("← Назад к списку")
+        }
+
+        Text(
+            text = "Центр управления флотом",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Всего кораблей: ${state.totalCount}", fontWeight = FontWeight.SemiBold)
+                Text("В доке: ${state.dockedCount}")
+                Text("В полёте: ${state.inFlightCount}")
+                Text(
+                    text = "В аварийном состоянии: ${state.criticalCount}",
+                    color = if (state.criticalCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                )
+                Text("Суммарный груз на борту: ${state.totalCargo} т")
+            }
+        }
+
+        Button(
+            onClick = onLaunchAll,
+            enabled = state.canLaunchAny,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Отправить в экспедицию все готовые корабли")
+        }
+
+        OutlinedButton(
+            onClick = onDockAll,
+            enabled = state.canDockAny,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Вернуть в док все корабли из полёта")
+        }
+    }
+}
+
+@Composable
+private fun ShuttleNotFoundScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Шаттл не найден в базе флота",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Button(onClick = onBack) {
+            Text("Вернуться к списку")
         }
     }
 }
