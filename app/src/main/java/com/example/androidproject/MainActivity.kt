@@ -42,7 +42,6 @@ enum class ShuttleStatus(val label: String) {
     CRITICAL_FAILURE("Авария систем")
 }
 
-// Единый объект состояния (State)
 data class ShuttleUiState(
     val fuel: Int = 100,
     val hull: Int = 100,
@@ -58,7 +57,6 @@ data class ShuttleUiState(
     val canDock: Boolean = status == ShuttleStatus.IN_FLIGHT
 }
 
-// Saver позволяет сохранять весь объект ShuttleUiState в rememberSaveable без лишних плагинов
 val ShuttleStateSaver = listSaver<ShuttleUiState, Any>(
     save = { state -> listOf(state.fuel, state.hull, state.cargo, state.status.name) },
     restore = { saved ->
@@ -84,7 +82,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Корневой App composable (Stateful — владеет состоянием)
 @Composable
 fun ShuttleApp(modifier: Modifier = Modifier) {
     var uiState by rememberSaveable(stateSaver = ShuttleStateSaver) {
@@ -119,7 +116,6 @@ fun ShuttleApp(modifier: Modifier = Modifier) {
     )
 }
 
-// Самостоятельный переиспользуемый экран (Stateless)
 @Composable
 fun ShuttleScreen(
     state: ShuttleUiState,
