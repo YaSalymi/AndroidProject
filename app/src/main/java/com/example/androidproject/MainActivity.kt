@@ -25,8 +25,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -42,20 +42,34 @@ enum class ShuttleStatus(val label: String) {
     CRITICAL_FAILURE("Авария систем")
 }
 
+// Единый объект состояния (State)
 data class ShuttleUiState(
     val fuel: Int = 100,
     val hull: Int = 100,
     val cargo: Int = 0,
     val status: ShuttleStatus = ShuttleStatus.DOCKED
 ) {
-    // Вспомогательные вычисляемые свойства для UI
     val isCritical: Boolean = status == ShuttleStatus.CRITICAL_FAILURE
     val canLoadCargo: Boolean = status == ShuttleStatus.DOCKED && cargo < 50
-    // Правило от нескольких свойств:
+    // Комплексное правило от нескольких свойств:
     val canLaunch: Boolean = status == ShuttleStatus.DOCKED && fuel >= 30 && hull >= 50
-    val canJump: Boolean = status == ShuttleStatus.IN_FLIGHT && fuel >= 40
+    // Расход 25% позволяет сделать 3 прыжка (100 -> 75 -> 50 -> 25) и довести корпус (100 -> 65 -> 30 -> 0) до аварии
+    val canJump: Boolean = status == ShuttleStatus.IN_FLIGHT && fuel >= 25
     val canDock: Boolean = status == ShuttleStatus.IN_FLIGHT
 }
+
+// Saver позволяет сохранять весь объект ShuttleUiState в rememberSaveable без лишних плагинов
+val ShuttleStateSaver = listSaver<ShuttleUiState, Any>(
+    save = { state -> listOf(state.fuel, state.hull, state.cargo, state.status.name) },
+    restore = { saved ->
+        ShuttleUiState(
+            fuel = saved[0] as Int,
+            hull = saved[1] as Int,
+            cargo = saved[2] as Int,
+            status = ShuttleStatus.valueOf(saved[3] as String)
+        )
+    }
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,53 +77,51 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    ShuttleScreen()
+                    ShuttleApp()
                 }
             }
         }
     }
 }
 
+// Корневой App composable (Stateful — владеет состоянием)
 @Composable
-fun ShuttleScreen(modifier: Modifier = Modifier) {
-    var fuel by rememberSaveable { mutableIntStateOf(100) }
-    var hull by rememberSaveable { mutableIntStateOf(100) }
-    var cargo by rememberSaveable { mutableIntStateOf(0) }
-    var status by rememberSaveable { mutableStateOf(ShuttleStatus.DOCKED) }
+fun ShuttleApp(modifier: Modifier = Modifier) {
+    var uiState by rememberSaveable(stateSaver = ShuttleStateSaver) {
+        mutableStateOf(ShuttleUiState())
+    }
 
-    val uiState = ShuttleUiState(
-        fuel = fuel,
-        hull = hull,
-        cargo = cargo,
-        status = status
-    )
-
-    ShuttleContent(
+    ShuttleScreen(
         state = uiState,
-        onLoadCargo = { cargo = (cargo + 10).coerceAtMost(50) },
-        onLaunch = { status = ShuttleStatus.IN_FLIGHT },
-        onJump = {
-            val newFuel = (fuel - 40).coerceAtLeast(0)
-            val newHull = (hull - 35).coerceAtLeast(0)
-            fuel = newFuel
-            hull = newHull
-            if (newHull == 0) {
-                status = ShuttleStatus.CRITICAL_FAILURE
-            }
+        onLoadCargo = {
+            uiState = uiState.copy(cargo = (uiState.cargo + 10).coerceAtMost(50))
         },
-        onDock = { status = ShuttleStatus.DOCKED },
+        onLaunch = {
+            uiState = uiState.copy(status = ShuttleStatus.IN_FLIGHT)
+        },
+        onJump = {
+            val newFuel = (uiState.fuel - 25).coerceAtLeast(0)
+            val newHull = (uiState.hull - 35).coerceAtLeast(0)
+            val newStatus = if (newHull == 0) ShuttleStatus.CRITICAL_FAILURE else uiState.status
+            uiState = uiState.copy(
+                fuel = newFuel,
+                hull = newHull,
+                status = newStatus
+            )
+        },
+        onDock = {
+            uiState = uiState.copy(status = ShuttleStatus.DOCKED)
+        },
         onReset = {
-            fuel = 100
-            hull = 100
-            cargo = 0
-            status = ShuttleStatus.DOCKED
+            uiState = ShuttleUiState()
         },
         modifier = modifier
     )
 }
 
+// Самостоятельный переиспользуемый экран (Stateless)
 @Composable
-fun ShuttleContent(
+fun ShuttleScreen(
     state: ShuttleUiState,
     onLoadCargo: () -> Unit,
     onLaunch: () -> Unit,
@@ -236,7 +248,7 @@ fun ShuttleContent(
             enabled = state.canJump,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Совершить гиперпрыжок (-40% топл., -35% корп.)")
+            Text("Совершить гиперпрыжок (-25% топл., -35% корп.)")
         }
 
         Button(
@@ -265,10 +277,10 @@ fun ShuttleContent(
 
 @Preview(showBackground = true)
 @Composable
-private fun ShuttleContentPreview() {
+private fun ShuttleScreenPreview() {
     MaterialTheme {
-        ShuttleContent(
-            state = ShuttleUiState(fuel = 80, hull = 90, cargo = 20, status = ShuttleStatus.DOCKED),
+        ShuttleScreen(
+            state = ShuttleUiState(fuel = 75, hull = 65, cargo = 20, status = ShuttleStatus.IN_FLIGHT),
             onLoadCargo = {},
             onLaunch = {},
             onJump = {},
